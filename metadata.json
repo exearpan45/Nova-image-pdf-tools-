@@ -1,0 +1,7 @@
+{
+  "name": "NOVA PDF & Image Tools",
+  "description": "Convert, compress, resize, merge and manage PDF and image files with fast, simple and privacy-focused online tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
