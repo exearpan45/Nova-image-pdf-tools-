@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   FileText,
   Trash2,
@@ -14,6 +14,7 @@ import { ResultScreen } from '../../common/ResultScreen';
 import { imagesToPdf, ImageToPdfOptions, createPdfBlob } from '../../../utils/pdfOps';
 import { formatBytes } from '../../../utils/formatters';
 import { downloadBlob } from '../../../utils/download';
+import { validatePdfOutput, sanitizeSafeFilename, getFilenameWithoutExt } from '../../../utils/fileValidation';
 import { ProcessedResult } from '../../../types/tools';
 
 interface ImageItem {
@@ -30,6 +31,7 @@ export const ImageToPdfTool: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   const handleFilesAdded = (files: File[]) => {
     setError(null);
@@ -59,6 +61,13 @@ export const ImageToPdfTool: React.FC = () => {
     });
   };
 
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsProcessing(false);
+    setProgress(0);
+    setError('Operation cancelled by user.');
+  };
+
   const handleConvert = async () => {
     if (images.length === 0) {
       setError('Please upload at least one image.');
@@ -66,6 +75,7 @@ export const ImageToPdfTool: React.FC = () => {
     }
 
     try {
+      isCancelledRef.current = false;
       setIsProcessing(true);
       setError(null);
       setProgress(10);
@@ -74,11 +84,13 @@ export const ImageToPdfTool: React.FC = () => {
       const preparedImages: Array<{ bytes: ArrayBuffer; type: string }> = [];
 
       for (let i = 0; i < images.length; i++) {
+        if (isCancelledRef.current) return;
+
         const item = images[i];
         let bytes: ArrayBuffer;
         let type = item.file.type;
 
-        // If WEBP, convert to JPEG/PNG canvas blob first since pdf-lib natively embeds JPG & PNG
+        // If WEBP, convert to JPEG canvas blob first since pdf-lib natively embeds JPG & PNG
         if (type === 'image/webp') {
           const img = new Image();
           img.src = item.previewUrl;
@@ -103,6 +115,8 @@ export const ImageToPdfTool: React.FC = () => {
         setProgress(Math.round(10 + ((i + 1) / images.length) * 40));
       }
 
+      if (isCancelledRef.current) return;
+
       const options: ImageToPdfOptions = {
         pageSize,
         orientation,
@@ -110,14 +124,28 @@ export const ImageToPdfTool: React.FC = () => {
       };
 
       const pdfBytes = await imagesToPdf(preparedImages, options, (p) => {
-        setProgress(50 + Math.round(p * 0.45));
+        if (!isCancelledRef.current) {
+          setProgress(50 + Math.round(p * 0.45));
+        }
       });
 
+      if (isCancelledRef.current) return;
+
       const blob = createPdfBlob(pdfBytes);
+
+      // Output validation (Requirement 63)
+      const validation = await validatePdfOutput(blob);
+      if (!validation.valid) {
+        setError(validation.error || "We couldn't create a valid output file. Please try again.");
+        setIsProcessing(false);
+        return;
+      }
+
       const downloadUrl = URL.createObjectURL(blob);
+      const firstSafeName = sanitizeSafeFilename(getFilenameWithoutExt(images[0].file.name), 'images');
 
       setResult({
-        fileName: 'nova-converted-images.pdf',
+        fileName: `${firstSafeName}-document.pdf`,
         fileSize: blob.size,
         blob,
         downloadUrl,

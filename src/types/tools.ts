@@ -23,6 +23,8 @@ export interface ProcessedResult {
   fileName: string;
   fileSize: number;
   originalSize?: number;
+  targetSize?: number;
+  exactMatched?: boolean;
   blob: Blob;
   downloadUrl: string;
   format: string;

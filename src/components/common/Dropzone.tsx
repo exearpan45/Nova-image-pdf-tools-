@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileWarning, AlertCircle } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
+import { validateIncomingFile, MAX_FILE_SIZE_BYTES } from '../../utils/fileValidation';
 
 interface DropzoneProps {
   accept: string[]; // e.g. ['.pdf'] or ['.jpg', '.png', '.webp']
@@ -8,7 +9,7 @@ interface DropzoneProps {
   onFilesSelected: (files: File[]) => void;
   title?: string;
   subtitle?: string;
-  maxSizeBytes?: number; // default ~100MB
+  maxSizeBytes?: number; // default 50MB (Requirement 47)
 }
 
 export const Dropzone: React.FC<DropzoneProps> = ({
@@ -17,54 +18,47 @@ export const Dropzone: React.FC<DropzoneProps> = ({
   onFilesSelected,
   title,
   subtitle,
-  maxSizeBytes = 120 * 1024 * 1024,
+  maxSizeBytes = MAX_FILE_SIZE_BYTES,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const validateFiles = (incomingFiles: FileList | File[]): File[] => {
+  const processIncomingFiles = async (incomingFiles: FileList | File[]) => {
     setErrorMessage(null);
     setWarningMessage(null);
 
-    const validFiles: File[] = [];
     const filesArray = Array.from(incomingFiles);
+    if (filesArray.length === 0) return;
 
-    if (filesArray.length === 0) return [];
+    const validFiles: File[] = [];
 
     for (const file of filesArray) {
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      const isAccepted = accept.some((a) => {
-        if (a.startsWith('.')) return ext === a.toLowerCase();
-        return file.type.includes(a);
-      });
-
-      if (!isAccepted) {
-        setErrorMessage(
-          `This file type isn't supported. Please choose ${accept.join(', ').toUpperCase()}.`,
-        );
-        return [];
-      }
-
       if (file.size > maxSizeBytes) {
         setErrorMessage(
-          `File "${file.name}" exceeds the maximum limit of ${formatBytes(maxSizeBytes)}.`,
+          'This file is too large for this operation on your device/browser. Try a smaller file.',
         );
-        return [];
+        return;
       }
 
-      if (file.size > 35 * 1024 * 1024) {
-        setWarningMessage(
-          'This file is large and may require additional memory to process in your browser.',
-        );
+      const res = await validateIncomingFile(file, accept);
+      if (!res.valid) {
+        setErrorMessage(res.error || 'Invalid file.');
+        return;
+      }
+
+      if (res.warning) {
+        setWarningMessage(res.warning);
       }
 
       validFiles.push(file);
       if (!multiple) break;
     }
 
-    return validFiles;
+    if (validFiles.length > 0) {
+      onFilesSelected(validFiles);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -76,24 +70,17 @@ export const Dropzone: React.FC<DropzoneProps> = ({
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const valid = validateFiles(e.dataTransfer.files);
-      if (valid.length > 0) {
-        onFilesSelected(valid);
-      }
+      await processIncomingFiles(e.dataTransfer.files);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const valid = validateFiles(e.target.files);
-      if (valid.length > 0) {
-        onFilesSelected(valid);
-      }
-      // Reset input value so re-selecting same file triggers change
+      await processIncomingFiles(e.target.files);
       e.target.value = '';
     }
   };

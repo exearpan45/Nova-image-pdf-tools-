@@ -5,6 +5,7 @@ import {
   StandardFonts,
   PageSizes,
 } from 'pdf-lib';
+import { loadPdfDocument, renderPdfPageToBlob } from './pdfRenderer';
 
 export interface WatermarkOptions {
   text: string;
@@ -399,4 +400,206 @@ export async function compressPdf(
   }
 
   return compressedBytes;
+}
+
+/**
+ * Pad a valid PDF document with a clean, conforming comment block to hit the target byte size.
+ */
+export function padPdfToExactSize(inputBytes: Uint8Array, targetSizeBytes: number): Uint8Array {
+  if (inputBytes.length >= targetSizeBytes) return inputBytes;
+
+  // Use latin1 decoder so byte offsets map 1:1 with string character indices
+  let s = '';
+  for (let i = 0; i < inputBytes.length; i++) {
+    s += String.fromCharCode(inputBytes[i]);
+  }
+
+  const sxIdx = s.lastIndexOf('startxref');
+  const eIdx = s.lastIndexOf('%%EOF');
+  if (sxIdx === -1 || eIdx === -1) return inputBytes;
+
+  const curOffset = parseInt(s.substring(sxIdx + 9, eIdx).trim(), 10);
+  if (isNaN(curOffset)) return inputBytes;
+
+  const pre = s.substring(0, sxIdx);
+  let padLen = targetSizeBytes - inputBytes.length;
+
+  for (let trial = 0; trial < 10; trial++) {
+    const testOffset = curOffset + padLen;
+    const testTail = 'startxref\n' + testOffset + '\n%%EOF\n';
+    const candidateLen = pre.length + padLen + testTail.length;
+    const diff = targetSizeBytes - candidateLen;
+    if (diff === 0) break;
+    padLen += diff;
+  }
+
+  if (padLen < 4) return inputBytes;
+
+  const comment = '% ' + 'N'.repeat(padLen - 3) + '\n';
+  const finalOffset = curOffset + comment.length;
+  const finalTail = 'startxref\n' + finalOffset + '\n%%EOF\n';
+  const finalStr = pre + comment + finalTail;
+
+  const out = new Uint8Array(finalStr.length);
+  for (let i = 0; i < finalStr.length; i++) {
+    out[i] = finalStr.charCodeAt(i) & 0xff;
+  }
+  return out;
+}
+
+export interface CompressPdfTargetOptions {
+  exactMatch?: boolean; // Default true: pads PDF to match exact byte size requested
+  onProgress?: (percent: number) => void;
+}
+
+/**
+ * Compress PDF aiming towards an exact user-specified target size (in bytes).
+ * Supports both lossless object stream compression and visual page re-encoding for image/scanned PDFs.
+ */
+export async function compressPdfToTargetSize(
+  pdfBytes: ArrayBuffer,
+  targetSizeBytes: number,
+  optionsOrProgress?: CompressPdfTargetOptions | ((percent: number) => void),
+): Promise<Uint8Array> {
+  const onProgress = typeof optionsOrProgress === 'function' ? optionsOrProgress : optionsOrProgress?.onProgress;
+  const exactMatch = typeof optionsOrProgress === 'object' && optionsOrProgress.exactMatch !== undefined
+    ? optionsOrProgress.exactMatch
+    : true;
+
+  if (onProgress) onProgress(10);
+
+  // If input file is already smaller than or equal to targetSizeBytes
+  if (pdfBytes.byteLength <= targetSizeBytes) {
+    if (exactMatch) {
+      const padded = padPdfToExactSize(new Uint8Array(pdfBytes), targetSizeBytes);
+      if (onProgress) onProgress(100);
+      return padded;
+    }
+    if (onProgress) onProgress(100);
+    return new Uint8Array(pdfBytes);
+  }
+
+  // Tier 1: Lossless Stream Compression & Metadata cleanup
+  if (onProgress) onProgress(20);
+  const doc = await PDFDocument.load(pdfBytes);
+  doc.setTitle('');
+  doc.setAuthor('');
+  doc.setSubject('');
+  doc.setKeywords([]);
+  doc.setProducer('NOVA PDF Engine');
+
+  const losslessBytes = await doc.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    objectsPerTick: 100,
+  });
+
+  if (losslessBytes.length <= targetSizeBytes) {
+    if (onProgress) onProgress(100);
+    if (exactMatch) {
+      return padPdfToExactSize(losslessBytes, targetSizeBytes);
+    }
+    return losslessBytes;
+  }
+
+  // Tier 2: Visual page re-encoding for scanned or image-heavy PDFs
+  if (onProgress) onProgress(35);
+
+  try {
+    const pdfDoc = await loadPdfDocument(pdfBytes);
+    const totalPages = pdfDoc.numPages;
+
+    if (totalPages === 0) {
+      return losslessBytes;
+    }
+
+    // Overhead reserve: ~12% or 10KB minimum for PDF trailer & page object dictionaries
+    const overhead = Math.max(8192, Math.round(targetSizeBytes * 0.1));
+    const availableForPages = Math.max(1024, targetSizeBytes - overhead);
+    const perPageBudget = availableForPages / totalPages;
+
+    let scale = 1.25;
+    let quality = 0.75;
+
+    if (perPageBudget > 200_000) {
+      scale = 1.5;
+      quality = 0.85;
+    } else if (perPageBudget > 100_000) {
+      scale = 1.35;
+      quality = 0.75;
+    } else if (perPageBudget > 50_000) {
+      scale = 1.1;
+      quality = 0.65;
+    } else if (perPageBudget > 25_000) {
+      scale = 0.95;
+      quality = 0.50;
+    } else if (perPageBudget > 12_000) {
+      scale = 0.8;
+      quality = 0.40;
+    } else {
+      scale = 0.65;
+      quality = 0.30;
+    }
+
+    const renderAndBuild = async (s: number, q: number): Promise<Uint8Array> => {
+      const newPdf = await PDFDocument.create();
+      for (let p = 1; p <= totalPages; p++) {
+        const page = await pdfDoc.getPage(p);
+        const originalViewport = page.getViewport({ scale: 1.0 });
+        const widthPt = originalViewport.width;
+        const heightPt = originalViewport.height;
+
+        const blob = await renderPdfPageToBlob(pdfDoc, p, 'image/jpeg', q, s);
+        const imgBuffer = await blob.arrayBuffer();
+        const embedded = await newPdf.embedJpg(imgBuffer);
+
+        const newPage = newPdf.addPage([widthPt, heightPt]);
+        newPage.drawImage(embedded, {
+          x: 0,
+          y: 0,
+          width: widthPt,
+          height: heightPt,
+        });
+
+        if (onProgress) {
+          onProgress(40 + Math.round((p / totalPages) * 45));
+        }
+      }
+
+      newPdf.setProducer('NOVA PDF Engine');
+      return await newPdf.save({ useObjectStreams: true, addDefaultPage: false });
+    };
+
+    let builtBytes = await renderAndBuild(scale, quality);
+
+    // If still exceeds targetSizeBytes, do a correction pass
+    if (builtBytes.length > targetSizeBytes && quality > 0.25) {
+      if (onProgress) onProgress(88);
+      const ratio = targetSizeBytes / builtBytes.length;
+      scale = Math.max(0.5, scale * Math.sqrt(ratio) * 0.94);
+      quality = Math.max(0.2, quality * ratio * 0.90);
+      builtBytes = await renderAndBuild(scale, quality);
+    }
+
+    if (onProgress) onProgress(98);
+
+    if (builtBytes.length <= targetSizeBytes) {
+      if (exactMatch) {
+        return padPdfToExactSize(builtBytes, targetSizeBytes);
+      }
+      return builtBytes;
+    }
+
+    if (builtBytes.length < pdfBytes.byteLength) {
+      return builtBytes;
+    }
+
+    return losslessBytes;
+  } catch (err) {
+    console.warn('PDF raster compression fallback to lossless:', err);
+    if (losslessBytes.length < pdfBytes.byteLength) {
+      return losslessBytes;
+    }
+    return new Uint8Array(pdfBytes);
+  }
 }

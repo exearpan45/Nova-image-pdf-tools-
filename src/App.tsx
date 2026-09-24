@@ -23,7 +23,12 @@ import { ToolDispatcher } from './components/tools/ToolDispatcher';
 import { useFavorites } from './hooks/useFavorites';
 import { useTheme } from './hooks/useTheme';
 
-export default function App() {
+import { AuthProvider } from './context/AuthContext';
+import { AuthModal } from './components/auth/AuthModal';
+import { UserProfileModal } from './components/auth/UserProfileModal';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+
+function AppContent() {
   // Initialize theme
   useTheme();
 
@@ -137,11 +142,24 @@ export default function App() {
         favorites={favoriteIds}
       />
 
+      {/* Auth Modals & Admin Dashboard */}
+      <AuthModal />
+      <UserProfileModal />
+      <AdminDashboard />
+
       {/* Offline Status Badge */}
       <OfflineIndicator />
 
       {/* Footer */}
       <Footer onNavigate={navigate} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

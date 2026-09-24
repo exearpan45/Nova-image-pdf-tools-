@@ -181,13 +181,22 @@ export const ContactPage: React.FC = () => {
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition"
-          >
-            <Send className="w-4 h-4" />
-            <span>Send Message to {supportEmail}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+            <button
+              type="submit"
+              className="w-full sm:flex-1 py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition"
+            >
+              <Send className="w-4 h-4" />
+              <span>Submit Message to {supportEmail}</span>
+            </button>
+            <a
+              href={`mailto:${supportEmail}?subject=${encodeURIComponent(`[NOVA Support] ${subject}`)}&body=${encodeURIComponent(`From: ${name || 'User'} (${email || 'No email provided'})\n\n${message}`)}`}
+              className="w-full sm:w-auto py-3.5 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm flex items-center justify-center gap-2 transition border border-slate-200 dark:border-slate-700"
+            >
+              <Mail className="w-4 h-4 text-indigo-500" />
+              <span>Open in Email App</span>
+            </a>
+          </div>
         </form>
       )}
     </div>

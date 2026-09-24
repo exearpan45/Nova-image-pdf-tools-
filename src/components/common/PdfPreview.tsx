@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, FileText, AlertCircle, Loader2 } from 'lucide-react';
+import { loadPdfDocument, renderPdfPageToCanvas } from '../../utils/pdfRenderer';
 
 // Configure the worker for react-pdf
-// Use official cdnjs/unpkg matching react-pdf's bundled pdfjs version
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+}
 
 interface PdfPreviewProps {
   file: File | Blob | ArrayBuffer | Uint8Array | string | null;
@@ -30,10 +32,13 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalScale, setModalScale] = useState(1.2);
   const [hasError, setHasError] = useState(false);
+  const [canvasFallbackUrl, setCanvasFallbackUrl] = useState<string | null>(null);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
 
   useEffect(() => {
     setPageNumber(1);
     setHasError(false);
+    setCanvasFallbackUrl(null);
 
     if (!file) {
       setPdfSource(null);
@@ -48,7 +53,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
         URL.revokeObjectURL(url);
       };
     } else if (file instanceof Uint8Array || file instanceof ArrayBuffer) {
-      // Pass data object or Uint8Array copy
       const copy = file instanceof Uint8Array ? file : new Uint8Array(file);
       setPdfSource({ data: copy });
     } else {
@@ -64,9 +68,37 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }
   };
 
-  const onDocumentLoadError = (error: Error) => {
-    console.error('react-pdf Document error:', error);
+  const onDocumentLoadError = async (error: Error) => {
+    console.warn('react-pdf Document error, switching to canvas fallback:', error);
     setHasError(true);
+
+    if (!file) return;
+
+    try {
+      setFallbackLoading(true);
+      let buffer: ArrayBuffer;
+      if (file instanceof File || file instanceof Blob) {
+        buffer = await file.arrayBuffer();
+      } else if (file instanceof Uint8Array) {
+        buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
+      } else if (file instanceof ArrayBuffer) {
+        buffer = file;
+      } else {
+        return;
+      }
+
+      const doc = await loadPdfDocument(buffer);
+      setNumPages(doc.numPages);
+      if (onNumPagesLoaded) onNumPagesLoaded(doc.numPages);
+
+      const canvas = await renderPdfPageToCanvas(doc, 1, 1.2);
+      const url = canvas.toDataURL('image/png');
+      setCanvasFallbackUrl(url);
+    } catch (fallbackErr) {
+      console.error('Canvas fallback rendering also failed:', fallbackErr);
+    } finally {
+      setFallbackLoading(false);
+    }
   };
 
   if (!file || !pdfSource) {
@@ -125,15 +157,34 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
       {/* PDF View Container */}
       <div className="w-full flex items-center justify-center overflow-auto max-h-[420px] rounded-xl bg-white dark:bg-slate-950 p-2 shadow-inner border border-slate-200/60 dark:border-slate-800/60">
         {hasError ? (
-          <div className="py-12 flex flex-col items-center justify-center text-center p-4 text-slate-400">
-            <AlertCircle className="w-8 h-8 text-amber-500 mb-2" />
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Preview rendering unavailable
-            </p>
-            <p className="text-[11px] text-slate-400 max-w-[200px] mt-1">
-              Document is ready for processing.
-            </p>
-          </div>
+          canvasFallbackUrl ? (
+            <div className="flex flex-col items-center">
+              <img
+                src={canvasFallbackUrl}
+                alt="PDF Thumbnail Preview"
+                className="rounded shadow-xs max-w-full object-contain"
+                style={{ width }}
+              />
+              <span className="mt-2 text-[10px] text-slate-400 font-mono">
+                First Page Preview
+              </span>
+            </div>
+          ) : fallbackLoading ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+              <span className="text-xs">Generating thumbnail...</span>
+            </div>
+          ) : (
+            <div className="py-12 flex flex-col items-center justify-center text-center p-4 text-slate-400">
+              <AlertCircle className="w-8 h-8 text-amber-500 mb-2" />
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Preview rendering unavailable
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-[200px] mt-1">
+                Document is ready for processing.
+              </p>
+            </div>
+          )
         ) : (
           <Document
             file={pdfSource}

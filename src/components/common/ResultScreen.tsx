@@ -45,27 +45,56 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
       </div>
 
       {/* Savings Metric Box if compressed */}
-      {single && single.originalSize && single.originalSize > single.fileSize && (
-        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-sky-500/10 to-indigo-500/10 border border-emerald-500/20 grid grid-cols-3 gap-2 text-center">
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Original</div>
-            <div className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300">
-              {formatBytes(single.originalSize)}
+      {single && single.originalSize && (
+        <div className="space-y-2.5">
+          <div className={`p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-sky-500/10 to-indigo-500/10 border border-emerald-500/20 grid ${single.targetSize ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-2 text-center`}>
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Original</div>
+              <div className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300">
+                {formatBytes(single.originalSize)}
+              </div>
+            </div>
+
+            {single.targetSize && (
+              <div>
+                <div className="text-[11px] font-medium text-indigo-500 dark:text-indigo-400 font-semibold">Target Requested</div>
+                <div className="text-sm sm:text-base font-bold text-indigo-600 dark:text-indigo-400">
+                  {formatBytes(single.targetSize)}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Compressed Output</div>
+              <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400">
+                {formatBytes(single.fileSize)}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Total Saved</div>
+              <div className="text-sm sm:text-base font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-0.5">
+                <ArrowDownRight className="w-3.5 h-3.5" />
+                {single.originalSize > single.fileSize
+                  ? `${calculateSavings(single.originalSize, single.fileSize).percentage}%`
+                  : 'Optimized'}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Compressed</div>
-            <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400">
-              {formatBytes(single.fileSize)}
+
+          {single.targetSize && (
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                {single.exactMatched
+                  ? `Exact Target Match: Successfully generated ${formatBytes(single.fileSize)} output matching requested ${formatBytes(single.targetSize)}.`
+                  : `Limit Respected: Generated file (${formatBytes(single.fileSize)}) strictly within ${formatBytes(single.targetSize)}.`}
+              </span>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200">
+                {single.fileSize === single.targetSize ? '100% exact' : `${formatBytes(single.fileSize)}`}
+              </span>
             </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Saved</div>
-            <div className="text-sm sm:text-base font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-0.5">
-              <ArrowDownRight className="w-3.5 h-3.5" />
-              {calculateSavings(single.originalSize, single.fileSize).percentage}%
-            </div>
-          </div>
+          )}
         </div>
       )}
 

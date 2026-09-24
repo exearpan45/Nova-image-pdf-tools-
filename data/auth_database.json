@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "users": [
+    {
+      "id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "name": "System Administrator",
+      "email": "admin@novatools.internal",
+      "password_hash": "$2b$10$6fjIXw0IkFA8gngya7cVw..L6KfikK44OHMd7l3eFs8d0aCpRlBuK",
+      "role": "admin",
+      "status": "active",
+      "created_at": "2026-09-24T16:37:01.672Z",
+      "updated_at": "2026-09-24T16:37:27.203Z",
+      "last_login_at": "2026-09-24T16:37:27.202Z"
+    },
+    {
+      "id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "password_hash": "$2b$10$1QYEN1W/.BWxxHHmqktZ0OfPNayoBVFPrifNcwJHNJK2CUKLpYqiW",
+      "role": "user",
+      "status": "active",
+      "created_at": "2026-09-24T16:37:20.763Z",
+      "updated_at": "2026-09-24T16:37:27.324Z",
+      "last_login_at": "2026-09-24T16:37:27.324Z"
+    },
+    {
+      "id": "1574ae8c-ef49-4d5b-806b-583880051aa2",
+      "name": "Arpan",
+      "email": "exe.arpan@gmail.com",
+      "password_hash": "$2b$10$43ufk6tyqu8RqdU1wxuK.OLz1HbwfjL7bpzQ0cMqiOVlo/h4Y0WV2",
+      "role": "admin",
+      "status": "active",
+      "created_at": "2026-09-24T16:42:00.008Z",
+      "updated_at": "2026-09-24T16:42:49.496Z",
+      "last_login_at": "2026-09-24T16:42:49.496Z"
+    },
+    {
+      "id": "c5584d6a-6ebf-4227-8cea-16b514da4836",
+      "name": "Arpan",
+      "email": "exe.arpan45@gmail.com",
+      "password_hash": "$2b$10$lGNO5eOwStbBP5OkpMvGwODeUWbec0jL5llUMmrR2AUlbKGe06j/a",
+      "role": "admin",
+      "status": "active",
+      "created_at": "2026-09-24T16:42:00.109Z",
+      "updated_at": "2026-09-24T16:43:03.390Z",
+      "last_login_at": "2026-09-24T16:43:03.390Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "6bef3a1c8ccc448dfe01bbad03ec892deb24b4df3d5e8d461d5b5665f9eacec5",
+      "user_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "created_at": "2026-09-24T16:37:20.921Z",
+      "expires_at": "2026-10-01T16:37:20.921Z",
+      "last_active_at": "2026-09-24T16:37:20.928Z",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "937f212e709e804c0e57538233941354a0b3ae0e1afb9c41852064ffbd282f07",
+      "user_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "created_at": "2026-09-24T16:37:27.203Z",
+      "expires_at": "2026-10-01T16:37:27.203Z",
+      "last_active_at": "2026-09-24T16:37:27.223Z",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "5c182878e0562d267f3e1242b9785befd8b0ba8a02c495cf5f7306a72a8e164c",
+      "user_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "created_at": "2026-09-24T16:37:27.324Z",
+      "expires_at": "2026-10-01T16:37:27.324Z",
+      "last_active_at": "2026-09-24T16:37:27.324Z",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "8862ad483ec7f5db0378e3088806f40d62a8a491c34cf3a44a756e2c04ede2c8",
+      "user_id": "1574ae8c-ef49-4d5b-806b-583880051aa2",
+      "created_at": "2026-09-24T16:42:49.497Z",
+      "expires_at": "2026-10-01T16:42:49.497Z",
+      "last_active_at": "2026-09-24T16:42:49.497Z",
+      "user_agent": "curl/7.88.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "5fec16a54d673c3b61f149c77bfeae4b47beed14067f01736edf70ed348feea2",
+      "user_id": "c5584d6a-6ebf-4227-8cea-16b514da4836",
+      "created_at": "2026-09-24T16:43:03.391Z",
+      "expires_at": "2026-10-01T16:43:03.391Z",
+      "last_active_at": "2026-09-24T16:43:03.391Z",
+      "user_agent": "curl/7.88.1",
+      "ip_address": "127.0.0.1"
+    }
+  ],
+  "audit_logs": [
+    {
+      "id": "cedc755c-0192-4a08-932e-e2183d9c2eca",
+      "action": "user_login",
+      "actor_id": "c5584d6a-6ebf-4227-8cea-16b514da4836",
+      "actor_email": "exe.arpan45@gmail.com",
+      "target_id": "c5584d6a-6ebf-4227-8cea-16b514da4836",
+      "target_email": "exe.arpan45@gmail.com",
+      "created_at": "2026-09-24T16:43:03.391Z"
+    },
+    {
+      "id": "82341ad0-1d70-4922-9153-fdea4a218820",
+      "action": "user_login",
+      "actor_id": "1574ae8c-ef49-4d5b-806b-583880051aa2",
+      "actor_email": "exe.arpan@gmail.com",
+      "target_id": "1574ae8c-ef49-4d5b-806b-583880051aa2",
+      "target_email": "exe.arpan@gmail.com",
+      "created_at": "2026-09-24T16:42:49.499Z"
+    },
+    {
+      "id": "c411e2cf-9057-4008-9a8f-4eaa98645b45",
+      "action": "user_login",
+      "actor_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "actor_email": "john.doe@example.com",
+      "target_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "target_email": "john.doe@example.com",
+      "created_at": "2026-09-24T16:37:27.325Z"
+    },
+    {
+      "id": "87b0dd51-a665-4f08-bcc9-a60d1b1cd4e6",
+      "action": "admin_user_enabled",
+      "actor_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "actor_email": "admin@novatools.internal",
+      "target_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "target_email": "john.doe@example.com",
+      "details": {
+        "previousStatus": "active",
+        "newStatus": "active"
+      },
+      "created_at": "2026-09-24T16:37:27.224Z"
+    },
+    {
+      "id": "87f88819-50fc-4d6a-87d0-34e8070b51b4",
+      "action": "admin_user_disabled",
+      "actor_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "actor_email": "admin@novatools.internal",
+      "target_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "target_email": "john.doe@example.com",
+      "details": {
+        "previousStatus": "disabled",
+        "newStatus": "disabled"
+      },
+      "created_at": "2026-09-24T16:37:27.217Z"
+    },
+    {
+      "id": "5c94ad1d-76ed-432c-a098-6f96099edb48",
+      "action": "user_login",
+      "actor_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "actor_email": "admin@novatools.internal",
+      "target_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "target_email": "admin@novatools.internal",
+      "created_at": "2026-09-24T16:37:27.204Z"
+    },
+    {
+      "id": "f605fd4b-dcd6-494e-81cb-94f65acc92e4",
+      "action": "user_login",
+      "actor_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "actor_email": "admin@novatools.internal",
+      "target_id": "e4785907-057b-4ae5-8945-a5ceaa4196f2",
+      "target_email": "admin@novatools.internal",
+      "created_at": "2026-09-24T16:37:20.921Z"
+    },
+    {
+      "id": "f1f178f9-161e-4c91-9ec4-4e14e52e0212",
+      "action": "user_registered",
+      "actor_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "actor_email": "john.doe@example.com",
+      "target_id": "f9c5471d-cb7b-43fa-8c2f-b50dde86ac51",
+      "target_email": "john.doe@example.com",
+      "details": "Self registration",
+      "created_at": "2026-09-24T16:37:20.765Z"
+    },
+    {
+      "id": "a4bc3138-ca71-48af-9e1b-d15c80e14de6",
+      "action": "system_init_admin",
+      "actor_id": null,
+      "actor_email": null,
+      "target_id": null,
+      "target_email": null,
+      "details": "Initial administrator seeded (admin@novatools.internal)",
+      "created_at": "2026-09-24T16:37:01.673Z"
+    }
+  ]
+}

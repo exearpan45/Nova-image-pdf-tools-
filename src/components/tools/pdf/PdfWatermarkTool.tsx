@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib';
 import { Dropzone } from '../../common/Dropzone';
 import { ProgressBar } from '../../common/ProgressBar';
 import { ResultScreen } from '../../common/ResultScreen';
+import { PdfPreview } from '../../common/PdfPreview';
 import { watermarkPdf, WatermarkOptions, createPdfBlob } from '../../../utils/pdfOps';
 import { formatBytes, getFilenameWithoutExt } from '../../../utils/formatters';
 import { downloadBlob } from '../../../utils/download';
@@ -146,6 +147,23 @@ export const PdfWatermarkTool: React.FC = () => {
                 >
                   Change File
                 </button>
+              </div>
+
+              {/* Document First Page Preview */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <span>Document Page Preview</span>
+                  <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-normal">
+                    Interactive PDF Viewer
+                  </span>
+                </div>
+                <PdfPreview
+                  file={file}
+                  width={300}
+                  thumbnailOnly={false}
+                  showControls={true}
+                  className="shadow-inner"
+                />
               </div>
 
               {/* Watermark Live Visual Simulator */}

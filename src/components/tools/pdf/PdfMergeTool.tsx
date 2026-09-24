@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   FileText,
   Trash2,
@@ -14,6 +14,7 @@ import { ResultScreen } from '../../common/ResultScreen';
 import { mergePdfs, createPdfBlob } from '../../../utils/pdfOps';
 import { formatBytes } from '../../../utils/formatters';
 import { downloadBlob } from '../../../utils/download';
+import { validatePdfOutput } from '../../../utils/fileValidation';
 import { ProcessedResult } from '../../../types/tools';
 
 export const PdfMergeTool: React.FC = () => {
@@ -22,6 +23,7 @@ export const PdfMergeTool: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   const handleFilesAdded = (newFiles: File[]) => {
     setError(null);
@@ -43,6 +45,13 @@ export const PdfMergeTool: React.FC = () => {
     });
   };
 
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsProcessing(false);
+    setProgress(0);
+    setError('Operation cancelled by user.');
+  };
+
   const handleMerge = async () => {
     if (files.length < 2) {
       setError('Please upload at least 2 PDF files to merge.');
@@ -50,6 +59,7 @@ export const PdfMergeTool: React.FC = () => {
     }
 
     try {
+      isCancelledRef.current = false;
       setIsProcessing(true);
       setProgress(5);
       setError(null);
@@ -57,19 +67,35 @@ export const PdfMergeTool: React.FC = () => {
       // Read arrayBuffers
       const buffers: ArrayBuffer[] = [];
       for (let i = 0; i < files.length; i++) {
+        if (isCancelledRef.current) return;
         buffers.push(await files[i].arrayBuffer());
         setProgress(Math.round(5 + ((i + 1) / files.length) * 35));
       }
 
+      if (isCancelledRef.current) return;
+
       const mergedBytes = await mergePdfs(buffers, (p) => {
-        setProgress(40 + Math.round(p * 0.55));
+        if (!isCancelledRef.current) {
+          setProgress(40 + Math.round(p * 0.5));
+        }
       });
 
+      if (isCancelledRef.current) return;
+
       const blob = createPdfBlob(mergedBytes);
+
+      // Output Validation (Requirement 63)
+      const validation = await validatePdfOutput(blob);
+      if (!validation.valid) {
+        setError(validation.error || "We couldn't create a valid output file. Please try again.");
+        setIsProcessing(false);
+        return;
+      }
+
       const downloadUrl = URL.createObjectURL(blob);
 
       setResult({
-        fileName: 'nova-merged.pdf',
+        fileName: 'merged-pdf.pdf',
         fileSize: blob.size,
         blob,
         downloadUrl,
@@ -78,9 +104,14 @@ export const PdfMergeTool: React.FC = () => {
       setProgress(100);
     } catch (err: unknown) {
       console.error('Merge error:', err);
-      setError(
-        'Something went wrong while merging these PDFs. Please ensure none of the files are password-protected or corrupted.',
-      );
+      const errMsg = String(err).toLowerCase();
+      if (errMsg.includes('password') || errMsg.includes('encrypted')) {
+        setError("Password-protected PDFs aren't supported by this tool yet.");
+      } else if (errMsg.includes('corrupt') || errMsg.includes('damaged') || errMsg.includes('invalid')) {
+        setError('This file appears to be damaged or incomplete. Please try another copy.');
+      } else {
+        setError('Failed to merge these PDF files. Please ensure the files are valid and not password-protected.');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -212,7 +243,11 @@ export const PdfMergeTool: React.FC = () => {
       </div>
 
       {isProcessing && (
-        <ProgressBar progress={progress} operationText="Merging PDF files..." />
+        <ProgressBar
+          progress={progress}
+          operationText="Merging PDF files..."
+          onCancel={handleCancel}
+        />
       )}
 
       {error && (

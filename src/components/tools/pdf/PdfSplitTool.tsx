@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Scissors, AlertCircle, FileText } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 import { Dropzone } from '../../common/Dropzone';
 import { ProgressBar } from '../../common/ProgressBar';
 import { ResultScreen } from '../../common/ResultScreen';
+import { PdfPreview } from '../../common/PdfPreview';
 import {
   extractPagesFromPdf,
   splitPdfIntoSinglePages,
@@ -15,6 +16,7 @@ import {
   getFilenameWithoutExt,
 } from '../../../utils/formatters';
 import { downloadBlob, downloadFilesAsZip } from '../../../utils/download';
+import { validatePdfOutput, sanitizeSafeFilename } from '../../../utils/fileValidation';
 import { ProcessedResult } from '../../../types/tools';
 
 export const PdfSplitTool: React.FC = () => {
@@ -26,6 +28,7 @@ export const PdfSplitTool: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ProcessedResult[] | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   const handleFileSelected = async (files: File[]) => {
     const selected = files[0];
@@ -40,57 +43,90 @@ export const PdfSplitTool: React.FC = () => {
       const count = doc.getPageCount();
       setTotalPages(count);
       setRangeInput(`1-${Math.min(3, count)}`);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to read PDF pages:', err);
-      setError('Failed to inspect PDF. The file may be damaged or password-protected.');
+      const errMsg = String(err).toLowerCase();
+      if (errMsg.includes('password') || errMsg.includes('encrypted')) {
+        setError("Password-protected PDFs aren't supported by this tool yet.");
+      } else {
+        setError('This file appears to be damaged or incomplete. Please try another copy.');
+      }
       setFile(null);
     }
+  };
+
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsProcessing(false);
+    setProgress(0);
+    setError('Operation cancelled by user.');
   };
 
   const handleSplit = async () => {
     if (!file) return;
 
     try {
+      isCancelledRef.current = false;
       setIsProcessing(true);
       setError(null);
       setProgress(10);
 
       const buffer = await file.arrayBuffer();
-      const baseName = getFilenameWithoutExt(file.name);
+      const baseName = sanitizeSafeFilename(getFilenameWithoutExt(file.name), 'document');
       const createdResults: ProcessedResult[] = [];
 
       if (splitMode === 'every') {
         const pages = await splitPdfIntoSinglePages(buffer, (p) => {
-          setProgress(10 + Math.round(p * 0.85));
+          if (!isCancelledRef.current) {
+            setProgress(10 + Math.round(p * 0.85));
+          }
         });
 
-        pages.forEach((p) => {
+        if (isCancelledRef.current) return;
+
+        for (const p of pages) {
           const blob = createPdfBlob(p.bytes);
+          const validation = await validatePdfOutput(blob);
+          if (!validation.valid) {
+            setError(validation.error || "We couldn't create a valid output file. Please try again.");
+            setIsProcessing(false);
+            return;
+          }
+
           createdResults.push({
-            fileName: `${baseName}_page_${p.pageNumber}.pdf`,
+            fileName: `${baseName}-split-page-${String(p.pageNumber).padStart(2, '0')}.pdf`,
             fileSize: blob.size,
             blob,
             downloadUrl: URL.createObjectURL(blob),
             format: 'PDF',
             pagesCount: 1,
           });
-        });
+        }
       } else {
         // Range mode e.g. 1-3, 5
         const pageIndices = parsePageRange(rangeInput, totalPages);
         if (pageIndices.length === 0) {
-          setError(`Invalid page range. Please choose pages between 1 and ${totalPages}.`);
+          setError(`Invalid page range. Please choose valid pages between 1 and ${totalPages}.`);
           setIsProcessing(false);
           return;
         }
 
         setProgress(40);
         const splitBytes = await extractPagesFromPdf(buffer, pageIndices);
+        if (isCancelledRef.current) return;
+
         setProgress(90);
 
         const blob = createPdfBlob(splitBytes);
+        const validation = await validatePdfOutput(blob);
+        if (!validation.valid) {
+          setError(validation.error || "We couldn't create a valid output file. Please try again.");
+          setIsProcessing(false);
+          return;
+        }
+
         createdResults.push({
-          fileName: `${baseName}_extracted.pdf`,
+          fileName: `${baseName}-extracted.pdf`,
           fileSize: blob.size,
           blob,
           downloadUrl: URL.createObjectURL(blob),
@@ -99,13 +135,20 @@ export const PdfSplitTool: React.FC = () => {
         });
       }
 
+      if (isCancelledRef.current) return;
+
       setResults(createdResults);
       setProgress(100);
     } catch (err: unknown) {
       console.error('Split error:', err);
-      setError(
-        'Failed to split PDF. Please check the page range and ensure file is valid.',
-      );
+      const errMsg = String(err).toLowerCase();
+      if (errMsg.includes('password') || errMsg.includes('encrypted')) {
+        setError("Password-protected PDFs aren't supported by this tool yet.");
+      } else if (errMsg.includes('corrupt') || errMsg.includes('damaged')) {
+        setError('This file appears to be damaged or incomplete. Please try another copy.');
+      } else {
+        setError('Failed to split PDF. Please check the page range and ensure file is valid.');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -174,6 +217,22 @@ export const PdfSplitTool: React.FC = () => {
                 >
                   Change File
                 </button>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <span>Page Preview</span>
+                  <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-normal">
+                    Interactive • View all {totalPages || '...'} pages
+                  </span>
+                </div>
+                <PdfPreview
+                  file={file}
+                  width={300}
+                  thumbnailOnly={false}
+                  showControls={true}
+                  className="shadow-inner"
+                />
               </div>
 
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300 space-y-1">
@@ -255,7 +314,11 @@ export const PdfSplitTool: React.FC = () => {
       </div>
 
       {isProcessing && (
-        <ProgressBar progress={progress} operationText="Splitting PDF..." />
+        <ProgressBar
+          progress={progress}
+          operationText="Splitting PDF..."
+          onCancel={handleCancel}
+        />
       )}
 
       {error && (

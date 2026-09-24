@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Maximize2, AlertCircle, Lock, Unlock, Image as ImageIcon } from 'lucide-react';
 import { Dropzone } from '../../common/Dropzone';
 import { ProgressBar } from '../../common/ProgressBar';
@@ -6,6 +6,7 @@ import { ResultScreen } from '../../common/ResultScreen';
 import { resizeImage, getImageDimensions } from '../../../utils/imageOps';
 import { formatBytes, getFilenameWithoutExt } from '../../../utils/formatters';
 import { downloadBlob } from '../../../utils/download';
+import { validateImageOutput, sanitizeSafeFilename } from '../../../utils/fileValidation';
 import { ProcessedResult } from '../../../types/tools';
 
 export const ImageResizeTool: React.FC = () => {
@@ -22,6 +23,7 @@ export const ImageResizeTool: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   const handleFileSelected = async (files: File[]) => {
     const sel = files[0];
@@ -61,32 +63,57 @@ export const ImageResizeTool: React.FC = () => {
     setHeight(ph);
   };
 
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsProcessing(false);
+    setProgress(0);
+    setError('Operation cancelled by user.');
+  };
+
   const handleResize = async () => {
     if (!file || width <= 0 || height <= 0) {
-      setError('Please provide valid dimensions.');
+      setError('Please provide valid dimensions (width and height must be greater than 0).');
+      return;
+    }
+
+    // Requirement 57: Prevent enormous canvases that crash the browser
+    if (width > 8000 || height > 8000 || width * height > 40_000_000) {
+      setError('The requested dimensions exceed safe browser limits. Please choose dimensions under 8,000px.');
       return;
     }
 
     try {
+      isCancelledRef.current = false;
       setIsProcessing(true);
       setError(null);
       setProgress(30);
 
       const resizedBlob = await resizeImage(file, width, height, file.type, 0.92);
+      if (isCancelledRef.current) return;
+
       setProgress(85);
 
-      const ext = file.name.split('.').pop() || 'png';
+      // Output validation (Requirement 63)
+      const validation = await validateImageOutput(resizedBlob);
+      if (!validation.valid) {
+        setError(validation.error || "We couldn't create a valid output file. Please try again.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const downloadUrl = URL.createObjectURL(resizedBlob);
+      const safeBase = sanitizeSafeFilename(getFilenameWithoutExt(file.name), 'resized');
 
       setResult({
-        fileName: `${getFilenameWithoutExt(file.name)}_${width}x${height}.${ext}`,
+        fileName: `resized-${safeBase}_${width}x${height}.${ext}`,
         fileSize: resizedBlob.size,
         originalSize: file.size,
         blob: resizedBlob,
         downloadUrl,
         format: ext.toUpperCase(),
-        width,
-        height,
+        width: validation.width || width,
+        height: validation.height || height,
       });
       setProgress(100);
     } catch (err: unknown) {
@@ -268,7 +295,11 @@ export const ImageResizeTool: React.FC = () => {
       </div>
 
       {isProcessing && (
-        <ProgressBar progress={progress} operationText="Resizing image dimensions..." />
+        <ProgressBar
+          progress={progress}
+          operationText="Resizing image dimensions..."
+          onCancel={handleCancel}
+        />
       )}
 
       {error && (

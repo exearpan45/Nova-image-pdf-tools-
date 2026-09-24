@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib';
 import { Dropzone } from '../../common/Dropzone';
 import { ProgressBar } from '../../common/ProgressBar';
 import { ResultScreen } from '../../common/ResultScreen';
+import { PdfPreview } from '../../common/PdfPreview';
 import { rotatePdfPages, createPdfBlob } from '../../../utils/pdfOps';
 import {
   parsePageRange,
@@ -145,6 +146,22 @@ export const PdfRotateTool: React.FC = () => {
                 >
                   Change File
                 </button>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <span>Document Live Preview</span>
+                  <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-normal">
+                    {pageCount} pages • Interactive Preview
+                  </span>
+                </div>
+                <PdfPreview
+                  file={file}
+                  width={300}
+                  thumbnailOnly={false}
+                  showControls={true}
+                  className="shadow-inner"
+                />
               </div>
 
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">

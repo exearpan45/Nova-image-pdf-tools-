@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Image, FileArchive, AlertCircle, FileText } from 'lucide-react';
 import { Dropzone } from '../../common/Dropzone';
 import { ProgressBar } from '../../common/ProgressBar';
@@ -13,6 +13,7 @@ import {
   getFilenameWithoutExt,
 } from '../../../utils/formatters';
 import { downloadBlob, downloadFilesAsZip } from '../../../utils/download';
+import { validateImageOutput, sanitizeSafeFilename } from '../../../utils/fileValidation';
 import { ProcessedResult } from '../../../types/tools';
 
 interface PdfToImageToolProps {
@@ -35,6 +36,7 @@ export const PdfToImageTool: React.FC<PdfToImageToolProps> = ({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ProcessedResult[] | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   const handleFileSelected = async (files: File[]) => {
     const sel = files[0];
@@ -48,17 +50,30 @@ export const PdfToImageTool: React.FC<PdfToImageToolProps> = ({
       const doc = await loadPdfDocument(buffer);
       setTotalPages(doc.numPages);
       setCustomRange(`1-${Math.min(3, doc.numPages)}`);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to load PDF in renderer:', err);
-      setError('Could not load PDF. It may be corrupt or encrypted.');
+      const errMsg = String(err).toLowerCase();
+      if (errMsg.includes('password') || errMsg.includes('encrypted')) {
+        setError("Password-protected PDFs aren't supported by this tool yet.");
+      } else {
+        setError('Could not load PDF. It may be corrupt or encrypted.');
+      }
       setFile(null);
     }
+  };
+
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsProcessing(false);
+    setProgress(0);
+    setError('Operation cancelled by user.');
   };
 
   const handleConvert = async () => {
     if (!file) return;
 
     try {
+      isCancelledRef.current = false;
       setIsProcessing(true);
       setError(null);
       setProgress(5);
@@ -82,10 +97,12 @@ export const PdfToImageTool: React.FC<PdfToImageToolProps> = ({
       }
 
       const ext = format === 'image/jpeg' ? 'jpg' : 'png';
-      const baseName = getFilenameWithoutExt(file.name);
+      const baseName = sanitizeSafeFilename(getFilenameWithoutExt(file.name), 'page');
       const createdResults: ProcessedResult[] = [];
 
       for (let i = 0; i < targetPages.length; i++) {
+        if (isCancelledRef.current) return;
+
         const pageNum = targetPages[i];
         const blob = await renderPdfPageToBlob(
           doc,
@@ -96,22 +113,36 @@ export const PdfToImageTool: React.FC<PdfToImageToolProps> = ({
           format === 'image/png' ? !transparentBg : true,
         );
 
+        if (isCancelledRef.current) return;
+
+        // Output validation (Requirement 63)
+        const validation = await validateImageOutput(blob);
+        if (!validation.valid) {
+          setError(validation.error || "We couldn't create a valid output file. Please try again.");
+          setIsProcessing(false);
+          return;
+        }
+
         createdResults.push({
-          fileName: `${baseName}_page_${pageNum}.${ext}`,
+          fileName: `${baseName}_page_${String(pageNum).padStart(2, '0')}.${ext}`,
           fileSize: blob.size,
           blob,
           downloadUrl: URL.createObjectURL(blob),
           format: ext.toUpperCase(),
+          width: validation.width,
+          height: validation.height,
         });
 
         setProgress(Math.round(5 + ((i + 1) / targetPages.length) * 90));
       }
 
+      if (isCancelledRef.current) return;
+
       setResults(createdResults);
       setProgress(100);
     } catch (err: unknown) {
       console.error('PDF to image conversion error:', err);
-      setError('An error occurred during page conversion. Please try a lower resolution scale.');
+      setError('An error occurred during page conversion. Please try a lower resolution scale or smaller page range.');
     } finally {
       setIsProcessing(false);
     }
@@ -346,7 +377,11 @@ export const PdfToImageTool: React.FC<PdfToImageToolProps> = ({
       </div>
 
       {isProcessing && (
-        <ProgressBar progress={progress} operationText="Rendering PDF pages to images..." />
+        <ProgressBar
+          progress={progress}
+          operationText="Rendering PDF pages to images..."
+          onCancel={handleCancel}
+        />
       )}
 
       {error && (
